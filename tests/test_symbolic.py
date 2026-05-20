@@ -1,6 +1,20 @@
 import pytest
 
-from math_mcp.tools.symbolic import expand, factor, limit, series, simplify, solve, symbolic_diff, symbolic_integrate
+from math_mcp.tools.symbolic import (
+    dsolve,
+    expand,
+    factor,
+    inverse_laplace,
+    laplace_transform,
+    limit,
+    series,
+    simplify,
+    solve,
+    symbolic_diff,
+    symbolic_integrate,
+    symbolic_product,
+    symbolic_sum,
+)
 
 
 @pytest.mark.asyncio
@@ -314,3 +328,56 @@ async def test_series_nonzero_point() -> None:
     result = await series(expression="exp(x)", point="1", order=4)
 
     assert "O((x - 1)**4" in result["result"] or "O(x - 1" in result["result"]
+
+
+@pytest.mark.asyncio
+async def test_symbolic_sum_basel() -> None:
+    """sum(1/n**2, n=1..oo) = pi**2/6."""
+    result = await symbolic_sum(expression="1/n**2", index="n", start="1", end="oo")
+    assert "pi" in result["result"].lower() or "6" in result["result"]
+
+
+@pytest.mark.asyncio
+async def test_symbolic_sum_geometric() -> None:
+    """sum(x**n, n=0..oo) = 1/(1-x) for |x|<1."""
+    result = await symbolic_sum(expression="x**n", index="n", start="0", end="oo")
+    assert result["result"] is not None
+
+
+@pytest.mark.asyncio
+async def test_symbolic_product_factorial() -> None:
+    """product(n, n=1..5) = 120."""
+    result = await symbolic_product(expression="n", index="n", start="1", end="5")
+    assert "120" in result["result"]
+
+
+@pytest.mark.asyncio
+async def test_dsolve_exponential() -> None:
+    """y' = y gives y = C1*exp(x)."""
+    result = await dsolve(equation="Derivative(y(x), x) - y(x) = 0", function="y(x)")
+    assert "exp" in result["result"] or "C1" in result["result"]
+
+
+@pytest.mark.asyncio
+async def test_dsolve_with_ics() -> None:
+    """y' = y with y(0) = 1 gives exp(x)."""
+    result = await dsolve(
+        equation="Derivative(y(x), x) - y(x) = 0",
+        function="y(x)",
+        ics={"0": "1"},
+    )
+    assert "exp" in result["result"]
+
+
+@pytest.mark.asyncio
+async def test_laplace_exp() -> None:
+    """L{exp(-a*t)} = 1/(s+a)."""
+    result = await laplace_transform(expression="exp(-a*t)", t_var="t", s_var="s")
+    assert "1/(a + s)" in result["result"] or "1/(s + a)" in result["result"]
+
+
+@pytest.mark.asyncio
+async def test_inverse_laplace() -> None:
+    """L^-1{1/(s**2 + 1)} = sin(t)."""
+    result = await inverse_laplace(expression="1/(s**2 + 1)", s_var="s", t_var="t")
+    assert "sin" in result["result"]

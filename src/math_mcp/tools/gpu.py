@@ -212,11 +212,20 @@ async def gpu_eigen_batch(
         eigenvalues_np = np.asarray(eigenvalues_list)
     elapsed = time.perf_counter() - start
 
+    sample_eigenvectors = None
+    if not eigenvalues_only and eigenvectors is not None:
+        if use_gpu:
+            eigenvectors_np_full = cp.asnumpy(eigenvectors)
+        else:
+            eigenvectors_np_full = np.asarray(eigenvectors)
+        sample_eigenvectors = eigenvectors_np_full[:5, :, : min(5, eigenvectors_np_full.shape[-1])].tolist()
+
     return {
         "result": f"Eigenvalues for {batch_size} {n_rows}x{n_cols} matrices ({backend.upper()}, {elapsed:.4f}s)",
         "batch_size": int(batch_size),
         "matrix_size": int(n_rows),
         "eigenvalues": [row.tolist() for row in eigenvalues_np[:5]],
+        "eigenvectors": sample_eigenvectors,
         "backend": backend,
         "time_seconds": elapsed,
         "stats": {

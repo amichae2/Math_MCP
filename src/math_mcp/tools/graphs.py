@@ -173,24 +173,25 @@ async def spanning_tree(
     edges: list[list[Any]],
     weights: list[float] | None = None,
     maximize: bool = False,
+    edge_weights_attr: str = "weight",
 ) -> dict[str, Any]:
     """Compute a minimum or maximum spanning tree."""
-    graph = _build_graph(edges, directed=False, weights=weights)
+    graph = _build_graph(edges, directed=False, weights=weights, edge_weights_attr=edge_weights_attr)
     if graph.number_of_nodes() == 0:
         raise ValueError("graph must contain at least one node")
     if not nx.is_connected(graph):
         raise ValueError("graph must be connected to compute a spanning tree")
 
     if maximize:
-        tree = nx.maximum_spanning_tree(graph, weight="weight")
+        tree = nx.maximum_spanning_tree(graph, weight=edge_weights_attr)
         mode = "maximum"
     else:
-        tree = nx.minimum_spanning_tree(graph, weight="weight")
+        tree = nx.minimum_spanning_tree(graph, weight=edge_weights_attr)
         mode = "minimum"
-    total_weight = sum(data.get("weight", 1.0) for _, _, data in tree.edges(data=True))
+    total_weight = sum(data.get(edge_weights_attr, 1.0) for _, _, data in tree.edges(data=True))
     return {
         "result": f"Computed {mode} spanning tree with total weight {total_weight}",
-        "edges": [[u_node, v_node, float(data.get('weight', 1.0))] for u_node, v_node, data in tree.edges(data=True)],
+        "edges": [[u_node, v_node, float(data.get(edge_weights_attr, 1.0))] for u_node, v_node, data in tree.edges(data=True)],
         "total_weight": float(total_weight),
         "num_edges": int(tree.number_of_edges()),
         "latex": None,
@@ -200,10 +201,12 @@ async def spanning_tree(
 @tool_error_handler("graph_metrics")
 async def graph_metrics(
     edges: list[list[Any]],
+    weights: list[float] | None = None,
     metrics: list[str] | None = None,
+    edge_weights_attr: str = "weight",
 ) -> dict[str, Any]:
     """Compute common graph-theoretic summary metrics."""
-    graph = _build_graph(edges, directed=False)
+    graph = _build_graph(edges, directed=False, weights=weights, edge_weights_attr=edge_weights_attr)
     requested = {metric.lower() for metric in (metrics or ["density", "degree_centrality", "clustering", "connected_components", "diameter"])}
     result: dict[str, Any] = {
         "result": f"Computed {len(requested)} graph metrics",
@@ -215,7 +218,7 @@ async def graph_metrics(
     if "degree_centrality" in requested:
         result["degree_centrality"] = {str(node): float(value) for node, value in nx.degree_centrality(graph).items()}
     if "clustering" in requested:
-        result["clustering"] = {str(node): float(value) for node, value in nx.clustering(graph).items()}
+        result["clustering"] = {str(node): float(value) for node, value in nx.clustering(graph, weight=edge_weights_attr).items()}
     if "connected_components" in requested:
         result["connected_components"] = [sorted(component, key=str) for component in nx.connected_components(graph)]
     if "diameter" in requested:
@@ -225,7 +228,10 @@ async def graph_metrics(
             result["diameter"] = None
             result["diameter_warning"] = "graph is disconnected; diameter is undefined"
     if "betweenness_centrality" in requested:
-        result["betweenness_centrality"] = {str(node): float(value) for node, value in nx.betweenness_centrality(graph).items()}
+        result["betweenness_centrality"] = {
+            str(node): float(value)
+            for node, value in nx.betweenness_centrality(graph, weight=edge_weights_attr).items()
+        }
     return result
 
 

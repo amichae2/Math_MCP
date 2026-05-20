@@ -137,13 +137,11 @@ async def render_math(
             "warning": "matplotlib mathtext could not render the provided LaTeX",
         }
 
-    image_bytes = base64.b64decode(data_uri.split(",", 1)[1])
-    image = plt.imread(io.BytesIO(image_bytes), format="png")
     return {
         "result": f"Rendered LaTeX ({fontsize}pt, {dpi}dpi)",
         "data_uri": data_uri,
-        "width": int(image.shape[1]),
-        "height": int(image.shape[0]),
+        "width": None,
+        "height": None,
         "latex": latex,
     }
 

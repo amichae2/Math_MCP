@@ -12,11 +12,25 @@ Editable install with `uv`:
 uv pip install -e .
 ```
 
+For GPU acceleration (requires CUDA 12.x and a compatible NVIDIA GPU):
+
+```bash
+uv pip install -e ".[gpu]"
+```
+
+Editable install with `uv` and optional GPU support:
+
+```bash
+uv pip install -e ".[gpu]"
+```
+
 Editable install with `pip`:
 
 ```bash
 pip install -e .
 ```
+
+Use the base install for CPU-only systems. Install the `gpu` extra only on machines with a compatible CUDA 12.x environment.
 
 For development dependencies and tests:
 

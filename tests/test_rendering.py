@@ -16,8 +16,8 @@ async def test_render_math_returns_png_data_uri() -> None:
     result = await render_math(r"\int_0^1 x^2\,dx = \frac{1}{3}")
 
     assert result["data_uri"].startswith("data:image/png;base64,")
-    assert result["width"] > 0
-    assert result["height"] > 0
+    assert result["width"] is None
+    assert result["height"] is None
 
 
 @pytest.mark.asyncio

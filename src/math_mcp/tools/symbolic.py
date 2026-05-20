@@ -186,12 +186,13 @@ def _format_single_variable_result(
     variable: sympy.Symbol,
     solutions: list[Any],
     domain: str,
+    steps: list[str] | None = None,
 ) -> dict[str, Any]:
     if not solutions:
         return {
             "result": f"no solutions in the {domain} domain",
             "latex": None,
-            "steps": None,
+            "steps": steps,
         }
 
     if len(solutions) == 1:
@@ -199,7 +200,7 @@ def _format_single_variable_result(
         return {
             "result": f"{variable} = {solution_expr}",
             "latex": sympy.latex(sympy.Eq(variable, solution_expr)),
-            "steps": None,
+            "steps": steps,
         }
 
     finite_set = sympy.FiniteSet(*[sympy.sympify(solution) for solution in solutions])
@@ -210,19 +211,20 @@ def _format_single_variable_result(
     return {
         "result": result,
         "latex": latex or sympy.latex(finite_set),
-        "steps": None,
+        "steps": steps,
     }
 
 
 def _format_system_result(
     solutions: list[dict[sympy.Symbol, Any]],
     domain: str,
+    steps: list[str] | None = None,
 ) -> dict[str, Any]:
     if not solutions:
         return {
             "result": f"no solutions in the {domain} domain",
             "latex": None,
-            "steps": None,
+            "steps": steps,
         }
 
     first_solution = solutions[0]
@@ -232,7 +234,7 @@ def _format_system_result(
     return {
         "result": result,
         "latex": latex,
-        "steps": None,
+        "steps": steps,
     }
 
 
@@ -240,29 +242,30 @@ def _format_set_result(
     variable: sympy.Symbol,
     solution_set: sympy.Set,
     domain: str,
+    steps: list[str] | None = None,
 ) -> dict[str, Any]:
     if solution_set == sympy.EmptySet:
         return {
             "result": f"no solutions in the {domain} domain",
             "latex": sympy.latex(solution_set),
-            "steps": None,
+            "steps": steps,
         }
     if solution_set in {sympy.S.Reals, sympy.S.Complexes, sympy.S.Integers}:
         return {
             "result": f"all {domain} numbers satisfy",
             "latex": sympy.latex(solution_set),
-            "steps": None,
+            "steps": steps,
         }
     if isinstance(solution_set, sympy.ConditionSet):
         return {
             "result": f"infinitely many solutions: {solution_set}",
             "latex": sympy.latex(solution_set),
-            "steps": None,
+            "steps": steps,
         }
     return {
         "result": f"{variable} in {solution_set}",
         "latex": sympy.latex(solution_set),
-        "steps": None,
+        "steps": steps,
     }
 
 
@@ -317,14 +320,13 @@ def _solve_equations(
             solution_set = sympy.reduce_inequalities([inequality], [variable])
         if isinstance(solution_set, sympy.Set):
             solution_set = solution_set.intersect(domain_set)
-            result = _format_set_result(variable, solution_set, domain)
+            result = _format_set_result(variable, solution_set, domain, steps=steps)
         else:
             result = {
                 "result": f"infinitely many solutions: {solution_set}",
                 "latex": sympy.latex(solution_set),
-                "steps": None,
+                "steps": steps,
             }
-        result["steps"] = steps
         return result
 
     if len(normalized_items) == 1 and len(variable_symbols) == 1:
@@ -349,15 +351,13 @@ def _solve_equations(
             raw_solutions = sympy.solve(expr, variable)
         if raw_solutions:
             filtered_solutions = _filter_solution_list(raw_solutions, domain)
-            result = _format_single_variable_result(variable, filtered_solutions, domain)
-            result["steps"] = steps
+            result = _format_single_variable_result(variable, filtered_solutions, domain, steps=steps)
             return result
 
         solution_set = sympy.solveset(expr, variable, domain=domain_set)
         if isinstance(solution_set, sympy.FiniteSet):
             filtered_solutions = _filter_solution_list(list(solution_set), domain)
-            result = _format_single_variable_result(variable, filtered_solutions, domain)
-            result["steps"] = steps
+            result = _format_single_variable_result(variable, filtered_solutions, domain, steps=steps)
             return result
         if isinstance(solution_set, sympy.ConditionSet):
             return {
@@ -365,16 +365,14 @@ def _solve_equations(
                 "latex": sympy.latex(solution_set),
                 "steps": steps,
             }
-        result = _format_set_result(variable, solution_set, domain)
-        result["steps"] = steps
+        result = _format_set_result(variable, solution_set, domain, steps=steps)
         return result
 
     equation_list = [sympy.sympify(item) for item in normalized_items]
     solution_dicts = sympy.solve(equation_list, variable_symbols, dict=True)
     filtered_solution_dicts = _filter_solution_dicts(solution_dicts, domain)
     if filtered_solution_dicts:
-        result = _format_system_result(filtered_solution_dicts, domain)
-        result["steps"] = steps
+        result = _format_system_result(filtered_solution_dicts, domain, steps=steps)
         return result
 
     return {
@@ -549,18 +547,31 @@ def _parse_ics(
     variable_symbol: sympy.Symbol,
     function_name: str,
 ) -> dict[sympy.Expr, sympy.Expr] | None:
+    """Parse initial/boundary conditions into a dict for sympy.dsolve."""
     if not ics:
         return None
 
     parsed: dict[sympy.Expr, sympy.Expr] = {}
     for key, value in ics.items():
-        value_expr = _parse_functional_expression(value, extra_symbols=[variable_symbol.name], extra_functions=[function_name])
+        value_expr = _parse_functional_expression(
+            value,
+            extra_symbols=[variable_symbol.name],
+            extra_functions=[function_name],
+        )
         stripped_key = key.strip()
+
         if stripped_key.isdigit():
             order = int(stripped_key)
-            lhs = function_expr if order == 0 else sympy.diff(function_expr, variable_symbol, order)
-            parsed[lhs.subs(variable_symbol, 0)] = value_expr
+
+            if order == 0:
+                lhs = function_expr.subs(variable_symbol, 0)
+            else:
+                derivative = sympy.diff(function_expr, variable_symbol, order)
+                lhs = sympy.Subs(derivative, variable_symbol, 0)
+
+            parsed[lhs] = value_expr
             continue
+
         normalized_key = stripped_key.replace("'", "Derivative")
         if stripped_key.startswith(f"{function_name}(") or stripped_key.startswith("Derivative("):
             lhs_expr = _parse_functional_expression(
@@ -570,7 +581,12 @@ def _parse_ics(
             )
             parsed[lhs_expr] = value_expr
             continue
-        raise ValueError("ics keys must be derivative orders like '0' or expressions like y(0)")
+
+        raise ValueError(
+            "ics keys must be derivative orders like '0', '1' or expressions like "
+            f"'{function_name}(0)', '{function_name}\'(0)'"
+        )
+
     return parsed
 
 

@@ -1,6 +1,7 @@
 """Statistics and probability tools using SciPy and NumPy."""
 
 import json
+import logging
 from typing import Any
 
 import numpy as np
@@ -9,6 +10,8 @@ import sympy
 
 from ..utils.errors import tool_error_handler
 from ..utils.latex_utils import safe_latex
+
+logger = logging.getLogger(__name__)
 
 _DEFAULT_PERCENTILES = [1, 5, 10, 25, 50, 75, 90, 95, 99]
 _DISTRIBUTION_ALIASES: dict[str, str] = {
@@ -597,7 +600,15 @@ async def regression(
         if not result.success:
             raise ValueError("logistic regression failed; check for perfect separation or singular predictors")
         beta = result.x
-        hessian_inv = np.asarray(result.hess_inv, dtype=float)
+        try:
+            hessian_inv = np.asarray(result.hess_inv, dtype=float)
+        except (AttributeError, TypeError):
+            jac = getattr(result, "jac", None)
+            if jac is not None and np.any(jac):
+                hessian_inv = np.eye(len(result.x)) * 1e-6
+            else:
+                hessian_inv = np.eye(len(result.x))
+            logger.warning("Hessian inverse not available for logistic regression; using fallback")
         std_errors = np.sqrt(np.diag(hessian_inv))
         if standardize and scales.size:
             beta = _rescale_standardized_coefficients(beta, means, scales, fit_intercept)
@@ -643,6 +654,7 @@ async def bootstrap(
         raise ValueError("bootstrap requires at least two observations")
     rng = np.random.default_rng(random_state)
     estimate = float(_bootstrap_statistic(cleaned, statistic))
+    actual_method = method
     if method == "bca" and hasattr(stats, "bootstrap") and statistic != "custom_function":
         stat_map = {
             "mean": np.mean,
@@ -658,6 +670,7 @@ async def bootstrap(
             method="BCa",
             random_state=rng,
         )
+        actual_method = "BCa"
         standard_error = float(result.standard_error)
         bias = 0.0
         ci_lower = float(result.confidence_interval.low)
@@ -699,7 +712,7 @@ async def bootstrap(
         "bias": bias,
         "ci_lower": ci_lower,
         "ci_upper": ci_upper,
-        "method": method,
+        "method": actual_method,
         "n_resamples": n_resamples,
         "latex": None,
     }

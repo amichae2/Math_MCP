@@ -590,7 +590,13 @@ async def diophantine(
         }
 
     parsed_equations = [_parse_equation_to_expr(item) for item in equations]
-    variables = sorted(set().union(*(expr.free_symbols for expr in parsed_equations)), key=lambda symbol: symbol.name)
+    variables = list(
+        dict.fromkeys(
+            symbol
+            for expr in parsed_equations
+            for symbol in sorted(expr.free_symbols, key=lambda item: item.name)
+        )
+    )
     solutions = sympy.linsolve(parsed_equations, *variables)
     if not solutions:
         return {"result": "no integer solutions", "general_solution": None, "small_solutions": [], "latex": None, "steps": None}
