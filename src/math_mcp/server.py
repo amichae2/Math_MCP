@@ -15,8 +15,7 @@ import asyncio
 import logging
 import sys
 
-from mcp.server import Server
-from mcp.server.stdio import stdio_server
+from mcp.server.fastmcp import FastMCP
 
 from .config import hw_config
 from .tools import discrete, gpu, graphs, linalg, numerical, rendering, statistics, symbolic
@@ -39,7 +38,7 @@ def setup_logging() -> None:
     root.addHandler(handler)
 
 
-def register_all_tools(server: Server) -> None:
+def register_all_tools(server: FastMCP) -> None:
     """Register all tool families with the MCP server."""
     symbolic.register(server)
     numerical.register(server)
@@ -59,12 +58,9 @@ async def serve() -> None:
     logger.info("Hardware: %s", hw_config.to_dict())
     logger.info("%s", "=" * 60)
 
-    server = Server("math-mcp-server")
+    server = FastMCP("math-mcp-server")
     register_all_tools(server)
-
-    async with stdio_server() as (reader, writer):
-        logger.info("MCP transport established (stdio)")
-        await server.run(reader, writer, server.create_initialization_options())
+    await server.run_stdio_async()
 
 
 def main() -> None:
